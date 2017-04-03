@@ -1,11 +1,20 @@
 const express = require('express');
 const VKApi = require('node-vkapi');
+// import * as firebase from 'firebase';
 
 const credentials = require('../credentials');
 const replyVariants = require('../replyVariants');
+const config = require('../configFirebase');
 
 const router = express.Router();
 const VK    = new VKApi();
+
+
+const commands = [
+    [/([Нн]апомни\s)(сегодня\s)?(в\s)(\d{1,2}:\d{2})/, 'add today at', ]
+];
+
+// firebase.initializeApp(config);
 
 
 router.post('/', function(req, res, next) {
@@ -18,6 +27,33 @@ router.post('/', function(req, res, next) {
             const userId = req.body.object.user_id;
             const receivedMsgId = req.body.object.id;
             const receivedMessageBody = req.body.object.body.toLowerCase();
+
+            let userSubscribed = false;
+
+            VK.call('messages.markAsRead', {
+                message_ids: receivedMsgId,
+                access_token: credentials.accessToken
+            });
+
+            console.log('Message received: ' + receivedMsgId);
+
+            //Check if user is subscribed to this public and propose to do it if not
+            VK.call('users.getSubscriptions', {
+                user_id: userId
+            }).then(subscriptions => {
+                if(!subscriptions.groups.items.includes(credentials.group_id)) {
+                    console.log('User is not subscribed');
+                    const replyMessage = getRandomReply(replyVariants.newMsgUnsub);
+                    return sendMessage(userId, credentials.accessToken, replyMessage, receivedMsgId);
+                } else {
+                    console.log('User is subscribed');
+                    return userSubscribed = true;
+                }
+            }).then(respond => {
+                if(userSubscribed) {
+
+                }
+            });
 
 
             res.send('ok');
