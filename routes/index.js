@@ -10,9 +10,12 @@ const router = express.Router();
 const VK    = new VKApi();
 
 
-const commands = [
-    [/([Нн]апомни\s)(сегодня\s)?(в\s)(\d{1,2}:\d{2})/, 'add today at', ]
-];
+const regexes = {
+    add: {
+        at: /(сегодня|завтра|послезавтра|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d))? в ((\d|[0-1]\d|2[0-3]):([0-5]\d)) (.+)/,
+        after: /через (([1-5]\d?) (минут[уы]?|час[аов]{0,2})|(час|полчаса)|((\d|1\d|2[0-3]):([0-5]\d))) (.+)/
+    }
+};
 
 // firebase.initializeApp(config);
 
@@ -47,12 +50,84 @@ router.post('/', function(req, res, next) {
                     return sendMessage(userId, credentials.accessToken, replyMessage, receivedMsgId);
                 } else {
                     console.log('User is subscribed');
-                    return userSubscribed = true;
+                    userSubscribed = true;
                 }
             }).then(respond => {
                 if(userSubscribed) {
+                    let userRequest,
+                        setupDate,
+                        reminder,
+                        message;
+                    //TODO: add replies for 'привет' & etc
+                    switch(receivedMessageBody.split(' ')[0]) {
+                        case 'напомни':
 
+                            if(receivedMessageBody.match(regexes.add.at)) {
+                                userRequest =  receivedMessageBody.match(regexes.add.at);
+                                reminder = userRequest[8];
+
+                                setupDate = getDateObj(new Date(), userRequest[6], userRequest[7]);
+
+                                //TODO: Detalize errors (for time error, date error, etc)
+                                if(userRequest[1] === 'завтра') {
+                                    setupDate.day++;
+                                }
+
+                                if(userRequest[1] === 'послезавтра') {
+                                    setupDate.day = setupDate.day + 2;
+                                }
+
+                                if(userRequest[2]) {
+                                    setupDate.day = userRequest[2];
+                                    setupDate.month = userRequest[3];
+                                    setupDate.year = userRequest[4];
+                                }
+
+                            } else if(receivedMessageBody.match(regexes.add.after)) {
+                                userRequest = receivedMessageBody.match(regexes.add.after);
+                                reminder = userRequest[8];
+
+                                setupDate = getDateObj(new Date());
+
+                                if(userRequest[2]) {
+                                    if(userRequest[3].includes('минут')) {
+                                        setupDate.minutes = setupDate.minutes + Number(userRequest[2]);
+                                    } else if(userRequest[3].includes('час')) {
+                                        setupDate.hours = setupDate.hours + Number(userRequest[2]);
+                                    }
+                                }
+
+                                if(userRequest[4]) {
+                                    if(userRequest[4] === 'час') {
+                                        setupDate.hours++;
+                                    } else if(userRequest[4] === 'полчаса') {
+                                        setupDate.minutes = setupDate.minutes + 30;
+                                    }
+                                }
+
+                                if(userRequest[5]) {
+                                    setupDate.hours = setupDate.hours + Number(userRequest[6]);
+                                    setupDate.minutes = setupDate.minutes + Number(userRequest[7]);
+                                }
+
+                                //round date
+                                setupDate = getDateObj(new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes));
+                            }
+                            break;
+
+                        default:
+                            break;
+                    }
+
+                    if(reminder) {
+                        message = 'Ваше напоминание: "' + reminder + '", будет прислано ' + setupDate.day + '.' + setupDate.month + '.' + setupDate.year + ' в ' + setupDate.hours + ':' + setupDate.minutes;
+                    } else {
+                        message = 'Неверный запрос! Для получения помощи напишите "помощь"'
+                    }
+                    sendMessage(userId, credentials.accessToken, message, receivedMsgId);
                 }
+            }).catch(err => {
+                console.log('ERROR: ' + err);
             });
 
 
@@ -114,4 +189,15 @@ function getRandomReply(replyArr) {
     } else {
         return false;
     }
+}
+
+function getDateObj(date, hours, minutes, day, month, year) {
+    let currentDate = date;
+    return {
+        hours: hours || currentDate.getHours(),
+        minutes: minutes || currentDate.getMinutes(),
+        day: day || currentDate.getDate(),
+        month: month || currentDate.getMonth() + 1,
+        year: year || currentDate.getFullYear()
+    };
 }
