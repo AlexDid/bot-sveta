@@ -67,8 +67,7 @@ router.post('/', function(req, res, next) {
                                 reminder = userRequest[8];
 
                                 setupDate = getDateObj(new Date(), userRequest[6], userRequest[7]);
-
-                                //TODO: Detalize errors (for time error, date error, etc)
+                                
                                 if(userRequest[1] === 'завтра') {
                                     setupDate.day++;
                                 }
@@ -91,9 +90,9 @@ router.post('/', function(req, res, next) {
 
                                 if(userRequest[2]) {
                                     if(userRequest[3].includes('минут')) {
-                                        setupDate.minutes = setupDate.minutes + Number(userRequest[2]);
+                                        setupDate.minutes = setupDate.minutes + (+userRequest[2]);
                                     } else if(userRequest[3].includes('час')) {
-                                        setupDate.hours = setupDate.hours + Number(userRequest[2]);
+                                        setupDate.hours = setupDate.hours + (+userRequest[2]);
                                     }
                                 }
 
@@ -106,8 +105,8 @@ router.post('/', function(req, res, next) {
                                 }
 
                                 if(userRequest[5]) {
-                                    setupDate.hours = setupDate.hours + Number(userRequest[6]);
-                                    setupDate.minutes = setupDate.minutes + Number(userRequest[7]);
+                                    setupDate.hours = setupDate.hours + (+userRequest[6]);
+                                    setupDate.minutes = setupDate.minutes + (+userRequest[7]);
                                 }
 
                                 //round date
@@ -120,7 +119,7 @@ router.post('/', function(req, res, next) {
                     }
 
                     if(reminder) {
-                        message = 'Ваше напоминание: "' + reminder + '", будет прислано ' + setupDate.day + '.' + setupDate.month + '.' + setupDate.year + ' в ' + setupDate.hours + ':' + setupDate.minutes;
+                        message = 'Ваше напоминание: "' + reminder + '", будет прислано ' + (setupDate.day < 10 ? '0' + setupDate.day : setupDate.day) + '.' + (setupDate.month < 10 ? '0' + setupDate.month : setupDate.month) + '.' + setupDate.year + ' в ' + setupDate.hours + ':' + setupDate.minutes;
                     } else {
                         message = 'Неверный запрос! Для получения помощи напишите "помощь"'
                     }
