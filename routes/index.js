@@ -13,9 +13,12 @@ const VK    = new VKApi();
 const regexes = {
     add: {
         at: /(сегодня|завтра|послезавтра|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d))? в ((\d|[0-1]\d|2[0-3]):([0-5]\d)) (.+)/,
-        after: /через (([1-5]\d?) (минут[уы]?|час[аов]{0,2})|(час|полчаса)|((\d|1\d|2[0-3]):([0-5]\d))) (.+)/
+        after: /через (([1-5]\d?) (минут[уы]?|час[аов]{0,2})|(час|полчаса)|((\d|1\d|2[0-3]):([0-5]\d))) (.+)/,
+        every: /(кажд[ыйоеую]{2}) (день|понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье|(0?[1-9]|[12][0-9]|3[01]) число) в ((\d|1\d|2[0-3]):([0-5]\d)) (.*)/
     }
 };
+
+const weekDays = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
 
 // firebase.initializeApp(config);
 
@@ -112,15 +115,72 @@ router.post('/', function(req, res, next) {
                                 //round date
                                 setupDate = getDateObj(new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes));
                             }
+
+                            if(reminder) {
+                                message = 'Ваше напоминание: "' + reminder + '", будет прислано ' + niceLookingDate(setupDate.day) + '.' + niceLookingDate(setupDate.month) + '.' + setupDate.year + ' в ' + niceLookingDate(setupDate.hours) + ':' + niceLookingDate(setupDate.minutes);
+                            }
+                            break;
+
+                        case 'напоминай':
+                            if(receivedMessageBody.match(regexes.add.every)) {
+                                let day, weekday, month, dates = [];
+
+                                userRequest = receivedMessageBody.match(regexes.add.every);
+                                reminder = userRequest[7];
+                                setupDate = getDateObj(new Date());
+
+                                if(userRequest[2] === 'день') {
+                                    day = ((setupDate.hours == userRequest[5] && setupDate.minutes < userRequest[6]) || (setupDate.hours < userRequest[5])) ? setupDate.day : setupDate.day + 1;
+
+                                    day--;
+
+                                } else if(weekDays.includes(userRequest[2])) {
+                                    weekday = weekDays.indexOf(userRequest[2]);
+
+                                    day = setupDate.weekday <= weekday ? setupDate.day + (weekday - setupDate.weekday) : setupDate.day + 7 - (setupDate.weekday - weekday);
+
+                                    if(setupDate.day == day && !((setupDate.hours == userRequest[5] && setupDate.minutes < userRequest[6]) || (setupDate.hours < userRequest[5]))) {
+                                        day = day + 7;
+                                    }
+
+                                    day = day - 7;
+
+                                } else if(userRequest[3]) {
+                                    day = userRequest[3];
+
+                                    if(day >= setupDate.day) {
+                                        month = setupDate.month;
+                                    } else if(day < setupDate.day) {
+                                        month = setupDate.month + 1;
+                                    }
+
+                                    if(setupDate.day == day && !((setupDate.hours == userRequest[5] && setupDate.minutes < userRequest[6]) || (setupDate.hours < userRequest[5]))) {
+                                        month++;
+                                    }
+
+                                    month--;
+                                }
+
+                                do {
+                                    if(weekday) {
+                                        day = day + 7;
+                                    } else if(month) {
+                                        month++;
+                                    } else {
+                                        day++;
+                                    }
+                                    dates.push(getDateObj(new Date(setupDate.year, (month ? month : setupDate.month) - 1, day, userRequest[5], userRequest[6])));
+                                } while(dates[dates.length - 1].year === setupDate.year);
+
+                                message = 'Ваше напоминание: "' + reminder + '", будет присылаться ' + userRequest[1] + ' ' + userRequest[2] + ' в ' + niceLookingDate(userRequest[5]) + ':' + niceLookingDate(userRequest[6]) + ', начиная с ' + niceLookingDate(dates[0].day) + '.' + niceLookingDate(dates[0].month) + '.' + dates[0].year;
+                            }
                             break;
 
                         default:
                             break;
                     }
 
-                    if(reminder) {
-                        message = 'Ваше напоминание: "' + reminder + '", будет прислано ' + (setupDate.day < 10 ? '0' + setupDate.day : setupDate.day) + '.' + (setupDate.month < 10 ? '0' + setupDate.month : setupDate.month) + '.' + setupDate.year + ' в ' + setupDate.hours + ':' + setupDate.minutes;
-                    } else {
+                    if(!message) {
                         message = 'Неверный запрос! Для получения помощи напишите "помощь"'
                     }
                     sendMessage(userId, credentials.accessToken, message, receivedMsgId);
@@ -190,13 +250,19 @@ function getRandomReply(replyArr) {
     }
 }
 
-function getDateObj(date, hours, minutes, day, month, year) {
+//TODO: is it necessary to use this function?
+function getDateObj(date, hours, minutes, day, month, year, weekday) {
     let currentDate = date;
     return {
         hours: hours || currentDate.getHours(),
         minutes: minutes || currentDate.getMinutes(),
         day: day || currentDate.getDate(),
         month: month || currentDate.getMonth() + 1,
-        year: year || currentDate.getFullYear()
+        year: year || currentDate.getFullYear(),
+        weekday: weekday || currentDate.getDay()
     };
+}
+
+function niceLookingDate(date) {
+    return date.toString().length < 2 ? '0' + date : date;
 }
