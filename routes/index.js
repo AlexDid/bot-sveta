@@ -15,6 +15,10 @@ const regexes = {
         at: /(сегодня|завтра|послезавтра|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d))? в ((\d|[0-1]\d|2[0-3]):([0-5]\d)) (.+)/,
         after: /через (([1-5]\d?) (минут[уы]?|час[аов]{0,2})|(час|полчаса)|((\d|1\d|2[0-3]):([0-5]\d))) (.+)/,
         every: /(кажд[ыйоеую]{2}) (день|понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье|(0?[1-9]|[12][0-9]|3[01]) число) в ((\d|1\d|2[0-3]):([0-5]\d)) (.*)/
+    },
+    show: {
+        all: /все напоминания/,
+        for: /напоминания на (сегодня|завтра|послезавтра|неделю|месяц|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d))/
     }
 };
 
@@ -176,6 +180,75 @@ router.post('/', function(req, res, next) {
                             }
                             break;
 
+                        case 'покажи':
+                            let reminders = {};
+
+                            if(receivedMessageBody.match(regexes.show.for)) {
+                                userRequest = receivedMessageBody.match(regexes.show.for);
+                                setupDate = getDateObj(new Date());
+
+                                if(userRequest[2]) {
+                                    setupDate.day = userRequest[2];
+                                    setupDate.month = userRequest[3];
+                                    setupDate.year = userRequest[4];
+                                    //TODO: get from db all reminders for {user_id: userId, dates.day: userRequest[2], dates.month: userRequest[3]}
+
+                                    reminder = {
+                                        thisDate: []
+                                    }
+                                } else {
+                                    let oneDay = false;
+                                    switch(userRequest[1]) {
+                                        case 'завтра':
+                                            oneDay = true;
+                                            setupDate.day++;
+                                            break;
+
+                                        case 'послезавтра':
+                                            oneDay = true;
+                                            setupDate.day = setupDate.day + 2;
+                                            break;
+
+                                        case 'неделю':
+                                            setupDate.day = setupDate.day + 7;
+                                            break;
+
+                                        case 'месяц':
+                                            setupDate.month++;
+                                            break;
+                                    }
+
+                                    //round date
+                                    setupDate = getDateObj(new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes));
+
+                                    if(oneDay) {
+                                        //TODO: get from db all reminders for {user_id: userId, dates.day: setupDate.day, dates.month: setupDate.month}
+                                        reminders = {
+                                            oneDate: []
+                                        }
+                                    } else {
+                                        //TODO: get from db all reminders from {user_id: userId, dates.day: from now till setupDate.day, dates.month: from now till setupDate.month}
+                                        reminders = {
+                                            oneDate: [],
+                                            anotherDate: []
+                                        }
+                                    }
+
+                                }
+                            } else if(receivedMessageBody.match(regexes.show.all)) {
+                                //TODO: get all reminders {user_idL userId}
+                                reminders = {
+                                    oneDate: [],
+                                    anotherDate: [],
+                                    oneMoreDate: []
+                                };
+                            }
+
+                            reminderMsg = reminders.map(); //TODO: return string 'oneDate: \n reminders[] \n\n anotherDate: \n reminders[]'
+
+                            message = 'Ваши напоминания: ' + reminderMsg;
+                            break;
+
                         default:
                             break;
                     }
@@ -251,6 +324,7 @@ function getRandomReply(replyArr) {
 }
 
 //TODO: is it necessary to use this function?
+//Maybe return rounded Date
 function getDateObj(date, hours, minutes, day, month, year, weekday) {
     let currentDate = date;
     return {
