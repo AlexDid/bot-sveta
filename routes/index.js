@@ -338,6 +338,11 @@ router.post('/', function(req, res, next) {
                             message = getRandomReply(replyVariants.newMsgSub);
                             break;
 
+                        case 'спасибо':
+                        case 'спасибочки':
+                            message = getRandomReply(replyVariants.thanks);
+                            break;
+
                         default:
                             break;
                     }
