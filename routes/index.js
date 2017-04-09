@@ -19,7 +19,9 @@ const regexes = {
     show: {
         all: /все напоминания/,
         for: /напоминания на (сегодня|завтра|послезавтра|неделю|месяц|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d))/
-    }
+    },
+    change: /(время|дату|текст) (последнего|\d+) напоминания на ((\d|[0-1]\d|2[0-3]):([0-5]\d)|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d)|.*)/,
+    delete: /(последнее|\d+) напоминание/
 };
 
 const weekDays = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
@@ -247,6 +249,64 @@ router.post('/', function(req, res, next) {
                             reminderMsg = reminders.map(); //TODO: return string 'oneDate: \n reminders[] \n\n anotherDate: \n reminders[]'
 
                             message = 'Ваши напоминания: ' + reminderMsg;
+                            break;
+
+                        case 'измени':
+                            if(receivedMessageBody.match(regexes.change)) {
+                                let reminderId;
+                                userRequest = receivedMessageBody.match(regexes.change);
+                                if(userRequest[2] === 'последнего') {
+                                    reminderId = 'last'; //TODO:get last id
+                                } else {
+                                    reminderId = userRequest[2];
+                                }
+
+                                //TODO: check if reminderId exists. In case it doesn't - send an error
+
+                                if(userRequest[1] === 'время') {
+                                    if(userRequest[4] && userRequest[5]) {
+                                        //TODO: get reminderId reminder and set time to userRequest[3] and userRequest[4]
+
+                                        message = 'Время Вашего ' + reminderId + ' напоминания изменено! Я напомню ' + '!ТЕКСТ!' + ' в ' + userRequest[3] + ' ' + '!ДАТА!';
+                                    } else {
+                                        message = 'Неправильно указано время!';
+                                    }
+                                }
+
+                                if(userRequest[1] === ' дату') {
+                                    if(userRequest[6] && userRequest[7] && userRequest[8]) {
+                                        //TODO: get reminderId reminder and set date to userRequest[5] and userRequest[6] and userRequest[7]
+
+                                        message = 'Дата Вашего ' + reminderId + ' напоминания изменена! Я напомню ' + '!ТЕКСТ!' + ' в ' + '!ВРЕМЯ!' + ' ' + userRequest[3];
+                                    } else {
+                                        message = 'Неправильно указана дата!';
+                                    }
+                                }
+
+                                if(userRequest[1] === 'текст') {
+                                    //TODO: get reminderId reminder and set text to userRequest[2]
+
+                                    message = 'Текст Вашего ' + reminderId + ' напоминания изменен! Я напомню ' + userRequest[3] + ' в ' + '!ВРЕМЯ!' + ' ' + '!ДАТА!';
+                                }
+                            }
+                            break;
+
+                        case 'удали':
+                            if(receivedMessageBody.match(regexes.delete)) {
+                                let reminderId;
+                                userRequest = receivedMessageBody.match(regexes.delete);
+                                if(userRequest[1] === 'последнее') {
+                                    reminderId = 'last'; //TODO:get last id
+                                } else {
+                                    reminderId = userRequest[1];
+                                }
+
+                                //TODO: check if reminderId exists. In case it doesn't - send an error
+
+                                //TODO: delete reminder
+
+                                message = 'Ваше ' + reminderId + ' напоминание было удалено';
+                            }
                             break;
 
                         default:
