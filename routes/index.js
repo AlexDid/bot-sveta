@@ -67,6 +67,7 @@ router.post('/', function(req, res, next) {
                         setupDate,
                         reminder,
                         message;
+
                     switch(receivedMessageBody.match(/^(([А-Яа-я]+)([ ,])?)/)[2]) {
                         case 'напомни':
 
@@ -75,7 +76,7 @@ router.post('/', function(req, res, next) {
                                 reminder = userRequest[8];
 
                                 setupDate = getDateObj(new Date(), userRequest[6], userRequest[7]);
-                                
+
                                 if(userRequest[1] === 'завтра') {
                                     setupDate.day++;
                                 }
@@ -94,6 +95,11 @@ router.post('/', function(req, res, next) {
                                 if(new Date().getTime() > new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes)) {
                                     reminder = null;
                                     message = getRandomReply(replyVariants.pastDate);
+                                }
+
+                                //check if user's date is bigger then the last day of the month
+                                if(new Date(setupDate.year, setupDate.month, 0).getDate() < setupDate.day) {
+                                    setupDate.day = new Date(setupDate.year, setupDate.month, 0).getDate();
                                 }
 
                             } else if(receivedMessageBody.match(regexes.add.after)) {
@@ -157,12 +163,11 @@ router.post('/', function(req, res, next) {
                                     day = day - 7;
 
                                 } else if(userRequest[3]) {
-                                    //TODO: check if month have this day (30/31)
-                                    day = userRequest[3];
+                                    monthDay = userRequest[3];
 
-                                    if(day >= setupDate.day) {
+                                    if(monthDay >= setupDate.day) {
                                         month = setupDate.month;
-                                    } else if(day < setupDate.day) {
+                                    } else if(monthDay < setupDate.day) {
                                         month = setupDate.month + 1;
                                     }
 
@@ -177,7 +182,12 @@ router.post('/', function(req, res, next) {
                                     if(weekday) {
                                         day = day + 7;
                                     } else if(month) {
+                                        day = monthDay;
                                         month++;
+                                        //check if user's date is bigger then the last day of the month
+                                        if(new Date(setupDate.year, month, 0).getDate() < day) {
+                                            day = new Date(setupDate.year, month, 0).getDate();
+                                        }
                                     } else {
                                         day++;
                                     }
@@ -339,6 +349,8 @@ router.post('/', function(req, res, next) {
                 }
             }).catch(err => {
                 console.log('ERROR: ' + err);
+                message = 'Неверный запрос! Для получения помощи напишите "помощь"'
+                sendMessage(userId, credentials.accessToken, message, receivedMsgId);
             });
 
 
