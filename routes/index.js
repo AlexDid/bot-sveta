@@ -67,8 +67,7 @@ router.post('/', function(req, res, next) {
                         setupDate,
                         reminder,
                         message;
-                    //TODO: add replies for 'привет' & etc
-                    switch(receivedMessageBody.split(' ')[0]) {
+                    switch(receivedMessageBody.match(/^(([А-Яа-я]+)([ ,])?)/)[2]) {
                         case 'напомни':
 
                             if(receivedMessageBody.match(regexes.add.at)) {
@@ -89,6 +88,12 @@ router.post('/', function(req, res, next) {
                                     setupDate.day = userRequest[2];
                                     setupDate.month = userRequest[3];
                                     setupDate.year = userRequest[4];
+                                }
+
+                                //check if user sets past date
+                                if(new Date().getTime() > new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes)) {
+                                    reminder = null;
+                                    message = getRandomReply(replyVariants.pastDate);
                                 }
 
                             } else if(receivedMessageBody.match(regexes.add.after)) {
@@ -152,6 +157,7 @@ router.post('/', function(req, res, next) {
                                     day = day - 7;
 
                                 } else if(userRequest[3]) {
+                                    //TODO: check if month have this day (30/31)
                                     day = userRequest[3];
 
                                     if(day >= setupDate.day) {
@@ -307,6 +313,19 @@ router.post('/', function(req, res, next) {
 
                                 message = 'Ваше ' + reminderId + ' напоминание было удалено';
                             }
+                            break;
+
+                        case 'помощь':
+                            message = replyVariants.help;
+                            break;
+
+                        case 'привет':
+                        case 'здравствуй':
+                        case 'здравствуйте':
+                        case 'дарова':
+                        case 'здарова':
+                        case 'приветики':
+                            message = getRandomReply(replyVariants.newMsgSub);
                             break;
 
                         default:
