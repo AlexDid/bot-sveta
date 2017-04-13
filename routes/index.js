@@ -1,10 +1,12 @@
 const express = require('express');
 const VKApi = require('node-vkapi');
-// import * as firebase from 'firebase';
+const firebase = require('firebase');
+const admin = require("firebase-admin");
 
-const credentials = require('../credentials');
+const credentials = require('../config/credentials');
 const replyVariants = require('../replyVariants');
-const config = require('../configFirebase');
+const config = require('../config/config.firebase');
+const serviceAccount = require('../config/firebase.admin.json');
 
 const router = express.Router();
 const VK    = new VKApi();
@@ -13,20 +15,25 @@ const VK    = new VKApi();
 const regexes = {
     add: {
         at: /(сегодня|завтра|послезавтра|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d))? в ((\d|[0-1]\d|2[0-3]):([0-5]\d)) (.+)/,
-        after: /через (([1-5]\d?) (минут[уы]?|час[аов]{0,2})|(час|полчаса)|((\d|1\d|2[0-3]):([0-5]\d))) (.+)/,
+        after: /через (([1-5]\d?) (мин[уты]{0,3}|ч[асов]{0,4})|(час|полчаса)|((\d|1\d|2[0-3]):([0-5]\d))) (.+)/,
         every: /(кажд[ыйоеую]{2}) (день|понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье|(0?[1-9]|[12][0-9]|3[01]) число) в ((\d|1\d|2[0-3]):([0-5]\d)) (.*)/
     },
     show: {
         all: /все напоминания/,
         for: /напоминания на (сегодня|завтра|послезавтра|неделю|месяц|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d))/
     },
-    change: /(время|дату|текст) (последнего|\d+) напоминания на ((\d|[0-1]\d|2[0-3]):([0-5]\d)|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d)|.*)/,
-    delete: /(последнее|\d+) напоминание/
+    change: /(время|дату|текст) (последнего|\d+(?:_\d+)?) напоминания на ((\d|[0-1]\d|2[0-3]):([0-5]\d)|(0?[1-9]|[12][0-9]|3[01])[- /.](0?[1-9]|1[012])[- /.](20\d\d)|.*)/,
+    delete: /(последнее|\d+(?:_\d+)?) напоминание/
 };
 
 const weekDays = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
 
-// firebase.initializeApp(config);
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://bot-sveta.firebaseio.com"
+});
+
+const database = admin.database();
 
 
 router.post('/', function(req, res, next) {
@@ -70,6 +77,7 @@ router.post('/', function(req, res, next) {
 
                     switch(receivedMessageBody.match(/^(([А-Яа-я]+)([ ,])?)/)[2]) {
                         case 'напомни':
+                            //TODO: add "напомни в субботу"
 
                             if(receivedMessageBody.match(regexes.add.at)) {
                                 userRequest =  receivedMessageBody.match(regexes.add.at);
@@ -109,9 +117,9 @@ router.post('/', function(req, res, next) {
                                 setupDate = getDateObj(new Date());
 
                                 if(userRequest[2]) {
-                                    if(userRequest[3].includes('минут')) {
+                                    if(userRequest[3].includes('мин')) {
                                         setupDate.minutes = setupDate.minutes + (+userRequest[2]);
-                                    } else if(userRequest[3].includes('час')) {
+                                    } else if(userRequest[3].includes('ч')) {
                                         setupDate.hours = setupDate.hours + (+userRequest[2]);
                                     }
                                 }
@@ -128,19 +136,23 @@ router.post('/', function(req, res, next) {
                                     setupDate.hours = setupDate.hours + (+userRequest[6]);
                                     setupDate.minutes = setupDate.minutes + (+userRequest[7]);
                                 }
-
-                                //round date
-                                setupDate = getDateObj(new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes));
                             }
 
                             if(reminder) {
+                                //round date
+                                setupDate = getDateObj(new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes));
+
+                                let date = new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes).getTime();
+
                                 message = 'Ваше напоминание: "' + reminder + '", будет прислано ' + niceLookingDate(setupDate.day) + '.' + niceLookingDate(setupDate.month) + '.' + setupDate.year + ' в ' + niceLookingDate(setupDate.hours) + ':' + niceLookingDate(setupDate.minutes);
+
+                                writeNewReminder(date, userId, receivedMsgId, reminder);
                             }
                             break;
 
                         case 'напоминай':
                             if(receivedMessageBody.match(regexes.add.every)) {
-                                let day, weekday, month, dates = [];
+                                let day, weekday, month, index = 0, dates = [];
 
                                 userRequest = receivedMessageBody.match(regexes.add.every);
                                 reminder = userRequest[7];
@@ -191,137 +203,94 @@ router.post('/', function(req, res, next) {
                                     } else {
                                         day++;
                                     }
-                                    dates.push(getDateObj(new Date(setupDate.year, (month ? month : setupDate.month) - 1, day, userRequest[5], userRequest[6])));
-                                } while(dates[dates.length - 1].year === setupDate.year);
+                                    dates.push(new Date(setupDate.year, (month ? month : setupDate.month) - 1, day, userRequest[5], userRequest[6]).getTime());
+                                } while(new Date(dates[dates.length - 1]).getFullYear() === setupDate.year);
 
-                                message = 'Ваше напоминание: "' + reminder + '", будет присылаться ' + userRequest[1] + ' ' + userRequest[2] + ' в ' + niceLookingDate(userRequest[5]) + ':' + niceLookingDate(userRequest[6]) + ', начиная с ' + niceLookingDate(dates[0].day) + '.' + niceLookingDate(dates[0].month) + '.' + dates[0].year;
+                                dates.forEach(function (date) {
+                                    index++;
+                                    writeNewReminder(date, userId, receivedMsgId + '_' + index, reminder);
+                                });
+                                message = 'Ваше напоминание: "' + reminder + '", будет присылаться ' + userRequest[1] + ' ' + userRequest[2] + ' в ' + niceLookingDate(userRequest[5]) + ':' + niceLookingDate(userRequest[6]) + ', начиная с ' + niceLookingDate(new Date(dates[0]).getDate()) + '.' + niceLookingDate(new Date(dates[0]).getMonth() + 1) + '.' + new Date(dates[0]).getFullYear();
                             }
                             break;
 
                         case 'покажи':
-                            let reminders = {};
 
                             if(receivedMessageBody.match(regexes.show.for)) {
+                                let fromTime, toTime;
                                 userRequest = receivedMessageBody.match(regexes.show.for);
                                 setupDate = getDateObj(new Date());
 
                                 if(userRequest[2]) {
-                                    setupDate.day = userRequest[2];
-                                    setupDate.month = userRequest[3];
-                                    setupDate.year = userRequest[4];
-                                    //TODO: get from db all reminders for {user_id: userId, dates.day: userRequest[2], dates.month: userRequest[3]}
+                                    setupDate = getDateObj(new Date(userRequest[4], userRequest[3] -1 , userRequest[2]));
 
-                                    reminder = {
-                                        thisDate: []
-                                    }
+                                    fromTime = new Date(userRequest[4], userRequest[3] - 1, userRequest[2], 0, 0).getTime();
+                                    toTime = new Date(userRequest[4], userRequest[3] - 1, +userRequest[2] + 1, 0, 0).getTime();
+
+                                    message = 'Ваши напоминания на ' + setupDate.dateWithoutTime + ':';
+
                                 } else {
-                                    let oneDay = false;
                                     switch(userRequest[1]) {
                                         case 'завтра':
-                                            oneDay = true;
-                                            setupDate.day++;
+                                            fromTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 1, 0, 0).getTime();
+                                            toTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 2, 0, 0).getTime();
                                             break;
 
                                         case 'послезавтра':
-                                            oneDay = true;
-                                            setupDate.day = setupDate.day + 2;
+                                            fromTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 2, 0, 0).getTime();
+                                            toTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 3, 0, 0).getTime();
                                             break;
 
                                         case 'неделю':
-                                            setupDate.day = setupDate.day + 7;
+                                            fromTime = new Date(setupDate.year, setupDate.month - 1, setupDate.day, 0, 0).getTime();
+                                            toTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 8, 0, 0).getTime();
                                             break;
 
                                         case 'месяц':
-                                            setupDate.month++;
+                                            fromTime = new Date(setupDate.year, setupDate.month - 1, setupDate.day, 0, 0).getTime();
+                                            toTime = new Date(setupDate.year, setupDate.month, +setupDate.day + 1, 0, 0).getTime();
                                             break;
                                     }
 
-                                    //round date
-                                    setupDate = getDateObj(new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes));
-
-                                    if(oneDay) {
-                                        //TODO: get from db all reminders for {user_id: userId, dates.day: setupDate.day, dates.month: setupDate.month}
-                                        reminders = {
-                                            oneDate: []
-                                        }
-                                    } else {
-                                        //TODO: get from db all reminders from {user_id: userId, dates.day: from now till setupDate.day, dates.month: from now till setupDate.month}
-                                        reminders = {
-                                            oneDate: [],
-                                            anotherDate: []
-                                        }
-                                    }
-
+                                    message = 'Ваши напоминания на ' + userRequest[1] + ':';
                                 }
+
+                                console.log(fromTime);
+                                console.log(toTime);
+
+                                showReminders(userId, receivedMsgId, fromTime, toTime);
+
                             } else if(receivedMessageBody.match(regexes.show.all)) {
-                                //TODO: get all reminders {user_idL userId}
-                                reminders = {
-                                    oneDate: [],
-                                    anotherDate: [],
-                                    oneMoreDate: []
-                                };
+                                message = 'Все Ваши напоминания: ';
+                                showReminders(userId, receivedMsgId);
                             }
 
-                            reminderMsg = reminders.map(); //TODO: return string 'oneDate: \n reminders[] \n\n anotherDate: \n reminders[]'
-
-                            message = 'Ваши напоминания: ' + reminderMsg;
                             break;
 
                         case 'измени':
                             if(receivedMessageBody.match(regexes.change)) {
-                                let reminderId;
                                 userRequest = receivedMessageBody.match(regexes.change);
-                                if(userRequest[2] === 'последнего') {
-                                    reminderId = 'last'; //TODO:get last id
-                                } else {
-                                    reminderId = userRequest[2];
-                                }
 
-                                //TODO: check if reminderId exists. In case it doesn't - send an error
-
-                                if(userRequest[1] === 'время') {
-                                    if(userRequest[4] && userRequest[5]) {
-                                        //TODO: get reminderId reminder and set time to userRequest[3] and userRequest[4]
-
-                                        message = 'Время Вашего ' + reminderId + ' напоминания изменено! Я напомню ' + '!ТЕКСТ!' + ' в ' + userRequest[3] + ' ' + '!ДАТА!';
-                                    } else {
+                                if(userRequest[1] === 'время' && !(userRequest[4] && userRequest[5]))  {
                                         message = 'Неправильно указано время!';
-                                    }
+                                        break;
                                 }
 
-                                if(userRequest[1] === ' дату') {
-                                    if(userRequest[6] && userRequest[7] && userRequest[8]) {
-                                        //TODO: get reminderId reminder and set date to userRequest[5] and userRequest[6] and userRequest[7]
-
-                                        message = 'Дата Вашего ' + reminderId + ' напоминания изменена! Я напомню ' + '!ТЕКСТ!' + ' в ' + '!ВРЕМЯ!' + ' ' + userRequest[3];
-                                    } else {
+                                if(userRequest[1] === ' дату' && !(userRequest[6] && userRequest[7] && userRequest[8])) {
                                         message = 'Неправильно указана дата!';
-                                    }
+                                        break;
                                 }
 
-                                if(userRequest[1] === 'текст') {
-                                    //TODO: get reminderId reminder and set text to userRequest[2]
-
-                                    message = 'Текст Вашего ' + reminderId + ' напоминания изменен! Я напомню ' + userRequest[3] + ' в ' + '!ВРЕМЯ!' + ' ' + '!ДАТА!';
-                                }
+                                message = 'none';
+                                editDeleteReminder('edit', userId, receivedMsgId, userRequest[2], userRequest[1], userRequest[3]);
                             }
                             break;
 
                         case 'удали':
                             if(receivedMessageBody.match(regexes.delete)) {
-                                let reminderId;
                                 userRequest = receivedMessageBody.match(regexes.delete);
-                                if(userRequest[1] === 'последнее') {
-                                    reminderId = 'last'; //TODO:get last id
-                                } else {
-                                    reminderId = userRequest[1];
-                                }
-
-                                //TODO: check if reminderId exists. In case it doesn't - send an error
-
-                                //TODO: delete reminder
-
-                                message = 'Ваше ' + reminderId + ' напоминание было удалено';
+                                message = 'none';
+                                editDeleteReminder('delete', userId, receivedMsgId, userRequest[1]);
                             }
                             break;
 
@@ -350,11 +319,14 @@ router.post('/', function(req, res, next) {
                     if(!message) {
                         message = 'Неверный запрос! Для получения помощи напишите "помощь"'
                     }
-                    sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+
+                    if(message !== 'none') {
+                        sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+                    }
                 }
             }).catch(err => {
                 console.log('ERROR: ' + err);
-                message = 'Неверный запрос! Для получения помощи напишите "помощь"'
+                message = 'Неверный запрос! Для получения помощи напишите "помощь"';
                 sendMessage(userId, credentials.accessToken, message, receivedMsgId);
             });
 
@@ -419,7 +391,7 @@ function getRandomReply(replyArr) {
     }
 }
 
-//TODO: is it necessary to use this function?
+//TODO: is it necessary to use this function? mb round | mb get method for complete Date dd.mm.yyyy
 //Maybe return rounded Date
 function getDateObj(date, hours, minutes, day, month, year, weekday) {
     let currentDate = date;
@@ -429,10 +401,133 @@ function getDateObj(date, hours, minutes, day, month, year, weekday) {
         day: day || currentDate.getDate(),
         month: month || currentDate.getMonth() + 1,
         year: year || currentDate.getFullYear(),
-        weekday: weekday || currentDate.getDay()
+        weekday: weekday || currentDate.getDay(),
+        completeDate: niceLookingDate(hours || currentDate.getHours()) + ':' + niceLookingDate(minutes || currentDate.getMinutes()) + ' ' + niceLookingDate(day || currentDate.getDate()) + '.' + niceLookingDate(month || currentDate.getMonth()+1) + '.' + (year || currentDate.getFullYear()),
+        dateWithoutTime: niceLookingDate(day || currentDate.getDate()) + '.' + niceLookingDate(month || currentDate.getMonth()+1) + '.' + (year || currentDate.getFullYear())
     };
 }
 
 function niceLookingDate(date) {
     return date.toString().length < 2 ? '0' + date : date;
+}
+
+function writeNewReminder(date, userId, reminderId, reminder) {
+    database.ref('dates/' + date + '/' + reminderId).set({user_id: userId, reminder: reminder});
+    database.ref('users/' + userId + '/' + reminderId).set({date: date, reminder: reminder});
+}
+
+function showReminders(userId, receivedMsgId, fromTime, toTime) {
+    database.ref().child('users').child(userId).once("value", function (snapshot) {
+        let reminders = snapshot.val();
+        let messages = [];
+        let message = '';
+
+        for(let reminderId in reminders) {
+            const date = getDateObj(new Date(reminders[reminderId].date)).completeDate;
+            messages.push(reminders[reminderId].date + ' ' + date + ' - ' + reminders[reminderId].reminder + ' (' + reminderId + ')\n');
+        }
+
+        messages = messages.sort();
+
+        if(fromTime && toTime) {
+            messages = messages.filter(reminder => {
+                const reminderDate = reminder.match(/\d{13}/);
+
+                return reminderDate >= fromTime && reminderDate < toTime;
+            });
+        }
+
+        if(messages.length === 0) {
+            message = 'Нет напоминаний';
+        } else {
+            message = messages.join('');
+            message = message.replace(/\d{13}/g, '');
+        }
+        setTimeout(() => {
+            sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+        }, 2000);
+    });
+}
+
+function editDeleteReminder(mode, userId, receivedMsgId, reminderId, changeValueType, changeValue) {
+    let updates = {};
+
+    database.ref().child('users').child(userId).once("value", function (snapshot) {
+        let reminders = snapshot.val(),
+            remindersKeys = Object.keys(reminders).sort((a, b) => a < b ? 1 : -1),
+            remindersToChange = [],
+            message;
+
+
+        //get last reminder and if it is repeatable, then slice the '_\d'
+        if(reminderId === 'последнего' || reminderId === 'последнее') {
+            reminderId = remindersKeys[0];
+            if(reminderId.includes('_')) {
+                reminderId = reminderId.slice(0, reminderId.indexOf('_'));
+            }
+        }
+
+        //get all instances of reminder
+        remindersKeys.forEach(rem => {
+            if(rem.match(new RegExp(reminderId + '_\\d+')) || rem === reminderId) {
+                remindersToChange.push(rem);
+            }
+        });
+
+        if(remindersToChange.length === 0) {
+            message = 'Неверный ID напоминания!';
+            return sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+        }
+
+            remindersToChange.forEach(rem => {
+                let setupDate = new Date(+reminders[rem].date);
+                let reminder = reminders[rem].reminder;
+
+                if(mode === 'delete') {
+                    updates['/users/' + userId + '/' + rem] = null;
+                    updates['/dates/' + reminders[rem].date + '/' + rem] = null;
+
+                    return message = 'Ваше напоминание ' + reminderId + ' удалено!';
+                }
+
+                const time = changeValue.match(/(\d{2}):(\d{2})/);
+                const date = changeValue.match(/(\d+)[- /.](\d+)[- /.](\d+)/);
+
+                if(changeValueType === 'время') {
+                    setupDate.setHours(time[1]);
+                    setupDate.setMinutes(time[2]);
+                } else if(changeValueType === 'дату') {
+                    setupDate.setDate(date[1]);
+                    setupDate.setMonth(date[2] - 1);
+                    setupDate.setFullYear(date[3]);
+                } else if(changeValueType === 'текст') {
+                    reminder = changeValue;
+                }
+
+                if(setupDate.getTime() <= new Date().getTime()) {
+                    return message = getRandomReply(replyVariants.pastDate);
+                }
+
+                if(remindersToChange.length > 1 && changeValueType === 'дату') {
+                    updates['/users/' + userId + '/' + rem] = null;
+                    updates['/dates/' + reminders[rem].date + '/' + rem] = null;
+
+                    updates['/users/' + userId + '/' + reminderId] = {date: setupDate.getTime(), reminder: reminder};
+                    updates['/dates/' + setupDate.getTime() + '/' + reminderId] = {reminder: reminder, user_id: userId};
+                } else {
+                    updates['/users/' + userId + '/' + rem] = {date: setupDate.getTime(), reminder: reminder};
+                    updates['/dates/' + reminders[rem].date + '/' + rem] = null;
+                    updates['/dates/' + setupDate.getTime() + '/' + rem] = {reminder: reminder, user_id: userId};
+
+                }
+
+                setupDate = getDateObj(new Date(setupDate.getTime()));
+
+                message = changeValueType.charAt(0).toUpperCase() + changeValueType.slice(1) + ' Вашего ' + reminderId + ' напоминания изменен(а)! Я напомню "' + reminder + '" ' + setupDate.completeDate;
+            });
+
+        database.ref().update(updates);
+
+        return sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+    });
 }
