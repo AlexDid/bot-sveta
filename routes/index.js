@@ -268,15 +268,11 @@ router.post('/', function(req, res, next) {
                                     msg = 'Ваши напоминания на ' + userRequest[1] + ':\n';
                                 }
 
-                                database.showReminders(userId, receivedMsgId, fromTime, toTime).then(mes => {
-                                    sendMessage(userId, credentials.accessToken, msg + mes, receivedMsgId);
-                                });
+                                database.showReminders(userId, receivedMsgId, fromTime, toTime).then(mes => sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
 
                             } else if (receivedMessageBody.match(regexes.show.all)) {
                                 msg = 'Все Ваши напоминания:\n';
-                                database.showReminders(userId, receivedMsgId).then(mes => {
-                                    sendMessage(userId, credentials.accessToken, msg + mes, receivedMsgId);
-                                });
+                                database.showReminders(userId, receivedMsgId).then(mes => sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
                             }
 
                         }
@@ -379,4 +375,16 @@ function sendMessage(userId, accessToken, replyMessage, receivedMsgId) {
         .catch(error => {
             console.log(error);
         });
+}
+
+function sendFewMessages(msg, mes, userId, token, receivedMsgId) {
+    if(typeof mes === 'object') {
+        sendMessage(userId, token, msg, receivedMsgId);
+        mes.forEach(ms => {
+            sendMessage(userId, token, ms, receivedMsgId);
+        });
+    } else {
+        sendMessage(userId, token, msg, receivedMsgId);
+        sendMessage(userId, token, mes, receivedMsgId);
+    }
 }

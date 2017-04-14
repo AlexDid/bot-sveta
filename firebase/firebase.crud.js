@@ -44,7 +44,8 @@ module.exports.showReminders = function(userId, receivedMsgId, fromTime, toTime)
     return database.ref().child('users').child(userId).once("value").then(snapshot => {
         let reminders = snapshot.val();
         let messages = [];
-        let message = '';
+        let message = '',
+            messageArray = [];
 
         for(let reminderId in reminders) {
             const date = func.getDateObj(new Date(reminders[reminderId].date)).completeDate;
@@ -66,6 +67,14 @@ module.exports.showReminders = function(userId, receivedMsgId, fromTime, toTime)
         } else {
             message = messages.join('');
             message = message.replace(/\d{13}/g, '');
+
+            if(message.length > 4096) {
+                 const count = Math.floor(message.length / 4096);
+                 for(let i = 0; i <= count; i++) {
+                     messageArray.push(message.slice(4096 * i, 4096 * (i + 1)));
+                 }
+                return messageArray;
+            }
         }
 
         return message;
