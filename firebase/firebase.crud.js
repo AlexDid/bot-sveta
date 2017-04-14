@@ -28,12 +28,12 @@ module.exports.writeNewReminder = function(date, userId, reminder) {
         reminderId = +remindersKeys[0].match(/(\d+)/)[1] + 1;
 
         if(typeof date === 'number') {
-            database.ref('dates/' + date + '/' + reminderId).set({user_id: userId, reminder: reminder});
+            database.ref('dates/' + date + '/' + userId + '_' + reminderId).set({user_id: userId, reminder: reminder});
             database.ref('users/' + userId + '/' + reminderId).set({date: date, reminder: reminder});
         } else if(typeof date === 'object') {
             date.forEach(function (dt) {
                 index++;
-                database.ref('dates/' + dt + '/' + reminderId + '_' + index).set({user_id: userId, reminder: reminder});
+                database.ref('dates/' + dt + '/' + userId + '_' + reminderId + '_' + index).set({user_id: userId, reminder: reminder});
                 database.ref('users/' + userId + '/' + reminderId + '_' + index).set({date: dt, reminder: reminder});
             });
         }
@@ -107,7 +107,7 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
 
             if(mode === 'delete') {
                 updates['/users/' + userId + '/' + rem] = null;
-                updates['/dates/' + reminders[rem].date + '/' + rem] = null;
+                updates['/dates/' + reminders[rem].date + '/' + userId + '_' + rem] = null;
 
                 return message = 'Ваше напоминание ' + reminderId + ' удалено!';
             }
@@ -132,14 +132,14 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
 
             if(remindersToChange.length > 1 && changeValueType === 'дату') {
                 updates['/users/' + userId + '/' + rem] = null;
-                updates['/dates/' + reminders[rem].date + '/' + rem] = null;
+                updates['/dates/' + reminders[rem].date + '/' + userId + '_' + rem] = null;
 
                 updates['/users/' + userId + '/' + reminderId] = {date: setupDate.getTime(), reminder: reminder};
-                updates['/dates/' + setupDate.getTime() + '/' + reminderId] = {reminder: reminder, user_id: userId};
+                updates['/dates/' + setupDate.getTime() + '/' + userId + '_' + reminderId] = {reminder: reminder, user_id: userId};
             } else {
                 updates['/users/' + userId + '/' + rem] = {date: setupDate.getTime(), reminder: reminder};
-                updates['/dates/' + reminders[rem].date + '/' + rem] = null;
-                updates['/dates/' + setupDate.getTime() + '/' + rem] = {reminder: reminder, user_id: userId};
+                updates['/dates/' + [rem].date + '/' + userId + '_' + rem] = null;
+                updates['/dates/' + setupDate.getTime() + '/' + userId + '_' + rem] = {reminder: reminder, user_id: userId};
 
             }
 
