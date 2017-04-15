@@ -1,3 +1,5 @@
+const VKApi = require('node-vkapi');
+const VK    = new VKApi();
 
 module.exports.getRandomReply = function(replyArr) {
     if(Array.isArray(replyArr)) {
@@ -23,6 +25,41 @@ module.exports.getDateObj = function(date, hours, minutes, day, month, year, wee
 
 module.exports.niceLookingDate = function (date) {
     return niceLookingDate(date);
+};
+
+//Sends basic message
+module.exports.sendMessage = function(userId, accessToken, replyMessage, receivedMsgId) {
+    return VK.call('users.get', {
+        user_ids: userId
+    })
+        .then(res => {
+            const userFirstName = res[0].first_name;
+            const message = replyMessage.replace('{{NAME}}', userFirstName);
+
+            return VK.call('messages.send', {
+                message: message,
+                user_id: userId,
+                access_token: accessToken
+            });
+        })
+        .then(res => {
+            console.log('Message read and answered: ' + (receivedMsgId !== undefined ? receivedMsgId : ('User ' + userId)));
+        })
+        .catch(error => {
+            console.log(error);
+        });
+};
+
+module.exports.sendFewMessages = function (msg, mes, userId, token, receivedMsgId) {
+    if(typeof mes === 'object') {
+        sendMessage(userId, token, msg, receivedMsgId);
+        mes.forEach(ms => {
+            sendMessage(userId, token, ms, receivedMsgId);
+        });
+    } else {
+        sendMessage(userId, token, msg, receivedMsgId);
+        sendMessage(userId, token, mes, receivedMsgId);
+    }
 };
 
 function niceLookingDate(date) {

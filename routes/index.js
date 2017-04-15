@@ -1,11 +1,10 @@
 //require modules
 const express = require('express');
 const VKApi = require('node-vkapi');
-const database = require('../firebase/firebase.crud');
+const database = require('../firebase/firebase.js');
 
 //require auth info
 const credentials = require('../config/credentials');
-const config = require('../config/config.firebase');
 
 //require data
 const replyVariants = require('../var/replyVariants');
@@ -47,7 +46,7 @@ router.post('/', function(req, res, next) {
                 if(!subscriptions.groups.items.includes(credentials.group_id)) {
                     console.log('User is not subscribed');
                     const replyMessage = func.getRandomReply(replyVariants.newMsgUnsub);
-                    return sendMessage(userId, credentials.accessToken, replyMessage, receivedMsgId);
+                    return func.sendMessage(userId, credentials.accessToken, replyMessage, receivedMsgId);
                 } else {
                     console.log('User is subscribed');
                     userSubscribed = true;
@@ -268,11 +267,11 @@ router.post('/', function(req, res, next) {
                                     msg = 'Ваши напоминания на ' + userRequest[1] + ':\n';
                                 }
 
-                                database.showReminders(userId, receivedMsgId, fromTime, toTime).then(mes => sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
+                                database.showReminders(userId, receivedMsgId, fromTime, toTime).then(mes => func.sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
 
                             } else if (receivedMessageBody.match(regexes.show.all)) {
                                 msg = 'Все Ваши напоминания:\n';
-                                database.showReminders(userId, receivedMsgId).then(mes => sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
+                                database.showReminders(userId, receivedMsgId).then(mes => func.sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
                             }
 
                         }
@@ -287,7 +286,7 @@ router.post('/', function(req, res, next) {
                                 } else {
                                     message = 'none';
                                     database.editDeleteReminder('edit', userId, receivedMsgId, userRequest[2], userRequest[1], userRequest[3]).then(mes => {
-                                        sendMessage(userId, credentials.accessToken, mes, receivedMsgId);
+                                        func.sendMessage(userId, credentials.accessToken, mes, receivedMsgId);
                                     });
                                 }
                         }
@@ -296,7 +295,7 @@ router.post('/', function(req, res, next) {
                                 userRequest = receivedMessageBody.match(regexes.delete);
                                 message = 'none';
                                 database.editDeleteReminder('delete', userId, receivedMsgId, userRequest[1]).then(mes => {
-                                    sendMessage(userId, credentials.accessToken, mes, receivedMsgId);
+                                    func.sendMessage(userId, credentials.accessToken, mes, receivedMsgId);
                                 });
                         }
 
@@ -317,13 +316,13 @@ router.post('/', function(req, res, next) {
                     }
 
                     if(message !== 'none') {
-                        sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+                        func.sendMessage(userId, credentials.accessToken, message, receivedMsgId);
                     }
                 }
             }).catch(err => {
                 console.log('ERROR: ' + err);
                 message = 'Неверный запрос! Для получения помощи напишите "помощь"';
-                sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+                func.sendMessage(userId, credentials.accessToken, message, receivedMsgId);
             });
             res.send('ok');
             break;
@@ -332,7 +331,7 @@ router.post('/', function(req, res, next) {
             const joinedUserId = req.body.object.user_id;
             const groupJoinReply = func.getRandomReply(replyVariants.groupJoin);
             console.log('User joined: ' + joinedUserId);
-            sendMessage(joinedUserId, credentials.accessToken, groupJoinReply);
+            func.sendMessage(joinedUserId, credentials.accessToken, groupJoinReply);
             res.send('ok');
             break;
 
@@ -340,7 +339,7 @@ router.post('/', function(req, res, next) {
             const leavedUserId = req.body.object.user_id;
             const groupLeaveReply = func.getRandomReply(replyVariants.groupLeave);
             console.log('User left: ' + leavedUserId);
-            sendMessage(leavedUserId, credentials.accessToken, groupLeaveReply);
+            func.sendMessage(leavedUserId, credentials.accessToken, groupLeaveReply);
             res.send('ok');
             break;
 
@@ -353,38 +352,3 @@ router.post('/', function(req, res, next) {
 });
 
 module.exports = router;
-
-//Sends basic message
-function sendMessage(userId, accessToken, replyMessage, receivedMsgId) {
-    return VK.call('users.get', {
-        user_ids: userId
-    })
-        .then(res => {
-            const userFirstName = res[0].first_name;
-            const message = replyMessage.replace('{{NAME}}', userFirstName);
-
-            return VK.call('messages.send', {
-                message: message,
-                user_id: userId,
-                access_token: accessToken
-            });
-        })
-        .then(res => {
-            console.log('Message read and answered: ' + (receivedMsgId !== undefined ? receivedMsgId : ('User ' + userId)));
-        })
-        .catch(error => {
-            console.log(error);
-        });
-}
-
-function sendFewMessages(msg, mes, userId, token, receivedMsgId) {
-    if(typeof mes === 'object') {
-        sendMessage(userId, token, msg, receivedMsgId);
-        mes.forEach(ms => {
-            sendMessage(userId, token, ms, receivedMsgId);
-        });
-    } else {
-        sendMessage(userId, token, msg, receivedMsgId);
-        sendMessage(userId, token, mes, receivedMsgId);
-    }
-}

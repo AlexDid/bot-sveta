@@ -1,9 +1,9 @@
-const firebase = require('firebase');
 const admin = require("firebase-admin");
 
 const serviceAccount = require('../config/firebase.admin.json');
 
 const func = require('../var/functions');
+const credentials = require('../config/credentials');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -163,6 +163,43 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
     });
 };
 
+
+module.exports.sendReminders = function() {
+    let sendDate = 9999999999999;
+
+    let sending = send();
+
+    database.ref().child('dates').on('child_added', snapshot => {
+        const newDate = snapshot.key;
+        if(newDate < sendDate) {
+            sendDate = newDate;
+            sending = send();
+        }
+    });
+
+    function send() {
+        return getFirstDate().then(firstDate => {
+            sendDate = firstDate;
+            const timeout = sendDate - new Date().getTime();
+
+            console.log(timeout);
+
+            return setTimeout(() => {
+                getRemindersForDate(sendDate).then(remObj => {
+                    remObj.remArray.forEach(rem => {
+                        func.sendMessage(rem.user_id, credentials.accessToken, rem.reminder);
+                    });
+                    return remObj.remIds;
+                }).then(remIds => {
+                    deleteDate(sendDate, remIds).then(res => {
+                        return send();
+                    });
+                })
+            }, timeout);
+        });
+    }
+};
+
 function naturalCompare(a, b) {
     let ax = [], bx = [];
 
@@ -177,4 +214,43 @@ function naturalCompare(a, b) {
     }
 
     return ax.length - bx.length;
+}
+
+function getFirstDate() {
+    return database.ref().child('dates').once('value').then(snapshot => {
+        const dates = snapshot.val();
+
+        return Object.keys(dates)[0];
+    });
+}
+
+function getRemindersForDate(date) {
+    return database.ref().child('dates').child(date).once('value').then(snapshot => {
+        const reminders = snapshot.val();
+        const remIds = Object.keys(reminders);
+        let remArray = [];
+
+        for(remId in reminders) {
+            if(reminders.hasOwnProperty(remId)) {
+                remArray.push(reminders[remId]);
+            }
+        }
+
+        return {remArray: remArray, remIds: remIds};
+    });
+}
+
+function deleteDate(date, remIds) {
+    const removeDate = {};
+    removeDate['/dates/' + date] = null;
+
+    remIds.forEach(remId => {
+        const remData = remId.match(/(\d+)_(\d+(?:_\d+)?)/);
+        const userId = remData[1],
+            userRemId = remData[2];
+
+        removeDate['/users/' + userId + '/' + userRemId] = null;
+    });
+
+    return database.ref().update(removeDate);
 }
