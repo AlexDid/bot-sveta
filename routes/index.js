@@ -130,6 +130,8 @@ router.post('/', function(req, res, next) {
                                         setupDate.hours++;
                                     } else if (userRequest[4] === 'полчаса') {
                                         setupDate.minutes = setupDate.minutes + 30;
+                                    } else if(userRequest[4] === 'минуту') {
+                                        setupDate.minutes++;
                                     }
                                 }
 
@@ -159,12 +161,22 @@ router.post('/', function(req, res, next) {
                                 setupDate = func.getDateObj(new Date());
 
                                 //setup time if it's not set
-                                if (userRequest[5] === undefined && userRequest[6] === undefined) {
-                                    userRequest[5] = 8;
-                                    userRequest[6] = 0;
+                                if (!userRequest[5] && !userRequest[6]) {
+                                    if(userRequest[2] === 'утро') {
+                                        userRequest[5] = 8;
+                                        userRequest[6] = 0;
+                                    }
+                                    if(userRequest[2] === 'день') {
+                                        userRequest[5] = 12;
+                                        userRequest[6] = 0;
+                                    }
+                                    if(userRequest[2] === 'вечер') {
+                                        userRequest[5] = 18;
+                                        userRequest[6] = 0;
+                                    }
                                 }
 
-                                if (userRequest[2] === 'день' || userRequest[2] === 'ежедневно') {
+                                if (userRequest[2] === 'вечер' || userRequest[2] === 'день' || userRequest[2] === 'утро'|| userRequest[2] === 'ежедневно') {
                                     day = ((setupDate.hours == userRequest[5] && setupDate.minutes < userRequest[6]) || (setupDate.hours < userRequest[5])) ? setupDate.day : setupDate.day + 1;
 
                                     day--;
@@ -309,6 +321,10 @@ router.post('/', function(req, res, next) {
 
                         if(commands.thx.includes(command)) {
                             message = func.getRandomReply(replyVariants.thanks);
+                        }
+
+                        if(commands.bye.includes(command)) {
+                            message = func.getRandomReply(replyVariants.bye);
                         }
 
                     if(!message) {
