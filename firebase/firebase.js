@@ -13,10 +13,11 @@ admin.initializeApp({
 const database = admin.database();
 
 module.exports.writeNewReminder = function(date, userId, reminder) {
-    database.ref().child('users').child(userId).once("value", function (snapshot) {
+    return database.ref().child('users').child(userId).once("value").then(snapshot => {
         let reminders = snapshot.val(),
             reminderId,
             remindersKeys = [],
+            message,
             index = 0;
 
         if(!reminders) {
@@ -28,8 +29,10 @@ module.exports.writeNewReminder = function(date, userId, reminder) {
         reminderId = +remindersKeys[0].match(/(\d+)/)[1] + 1;
 
         if(typeof date === 'number') {
+            const setupDate = func.getDateObj(new Date(date));
             database.ref('dates/' + date + '/' + userId + '_' + reminderId).set({user_id: userId, reminder: reminder});
             database.ref('users/' + userId + '/' + reminderId).set({date: date, reminder: reminder});
+            message = 'Ваше ' + reminderId + ' напоминание: "' + reminder + '", будет прислано в ' + setupDate.completeDate;
         } else if(typeof date === 'object') {
             date.forEach(function (dt) {
                 index++;
@@ -37,6 +40,8 @@ module.exports.writeNewReminder = function(date, userId, reminder) {
                 database.ref('users/' + userId + '/' + reminderId + '_' + index).set({date: dt, reminder: reminder});
             });
         }
+
+        return message;
     });
 };
 

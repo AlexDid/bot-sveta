@@ -9,7 +9,7 @@ const credentials = require('../config/credentials');
 //require data
 const replyVariants = require('../var/replyVariants');
 const regexes = require('../var/regexes');
-const weekDays = require('../var/weekDays');
+const arrays = require('../var/arrays');
 const commands = require('../var/commands');
 const func = require('../var/functions');
 
@@ -61,7 +61,54 @@ router.post('/', function(req, res, next) {
 
 
                         if(command === 'напомни') {
-                            if (receivedMessageBody.match(regexes.add.at)) {
+                            if (receivedMessageBody.match(regexes.add.after)) {
+                                userRequest = receivedMessageBody.match(regexes.add.after);
+                                reminder = userRequest[8];
+
+                                setupDate = func.getDateObj(new Date());
+
+                                if (userRequest[2]) {
+                                    if(userRequest[2].match(/[А-Яа-я]+/)) {
+                                        arrays.numbers.forEach(numberReg => {
+                                            if(userRequest[2].toString().match(new RegExp(numberReg))) {
+                                                userRequest[2] = arrays.numbers.indexOf(numberReg) + 1;
+                                                if(userRequest[2] > 20) {
+                                                    userRequest[2] = 20 + 10 * (userRequest[2] - 20);
+                                                }
+                                            }
+                                        });
+
+                                        if(userRequest[2] === 'полтора') {
+                                            setupDate.minutes = setupDate.minutes + 30;
+                                            userRequest[2] = 1;
+                                        } else {
+                                            reminder = null;
+                                            message = 'Неверно указана дата!'
+                                        }
+                                    }
+                                    if (userRequest[3].includes('мин')) {
+                                        setupDate.minutes = setupDate.minutes + (+userRequest[2]);
+                                    } else if (userRequest[3].includes('ч')) {
+                                        setupDate.hours = setupDate.hours + (+userRequest[2]);
+                                    }
+                                }
+
+                                if (userRequest[4]) {
+                                    if (userRequest[4] === 'час') {
+                                        setupDate.hours++;
+                                    } else if (userRequest[4] === 'полчаса') {
+                                        setupDate.minutes = setupDate.minutes + 30;
+                                    } else if(userRequest[4] === 'минуту') {
+                                        setupDate.minutes++;
+                                    }
+                                }
+
+                                if (userRequest[5]) {
+                                    setupDate.hours = setupDate.hours + (+userRequest[6]);
+                                    setupDate.minutes = setupDate.minutes + (+userRequest[7]);
+                                }
+
+                            } else if (receivedMessageBody.match(regexes.add.at)) {
                                 userRequest = receivedMessageBody.match(regexes.add.at);
                                 reminder = userRequest[8];
 
@@ -87,8 +134,8 @@ router.post('/', function(req, res, next) {
                                     setupDate.year = userRequest[4];
                                 }
 
-                                if(weekDays.includes(userRequest[1])) {
-                                    let weekday = weekDays.indexOf(userRequest[1]);
+                                if(arrays.weekDays.includes(userRequest[1])) {
+                                    let weekday = arrays.weekDays.indexOf(userRequest[1]);
 
                                     let day = setupDate.weekday <= weekday ? setupDate.day + (weekday - setupDate.weekday) : setupDate.day + 7 - (setupDate.weekday - weekday);
 
@@ -111,34 +158,6 @@ router.post('/', function(req, res, next) {
                                     setupDate.day = new Date(setupDate.year, setupDate.month, 0).getDate();
                                 }
 
-                            } else if (receivedMessageBody.match(regexes.add.after)) {
-                                userRequest = receivedMessageBody.match(regexes.add.after);
-                                reminder = userRequest[8];
-
-                                setupDate = func.getDateObj(new Date());
-
-                                if (userRequest[2]) {
-                                    if (userRequest[3].includes('мин')) {
-                                        setupDate.minutes = setupDate.minutes + (+userRequest[2]);
-                                    } else if (userRequest[3].includes('ч')) {
-                                        setupDate.hours = setupDate.hours + (+userRequest[2]);
-                                    }
-                                }
-
-                                if (userRequest[4]) {
-                                    if (userRequest[4] === 'час') {
-                                        setupDate.hours++;
-                                    } else if (userRequest[4] === 'полчаса') {
-                                        setupDate.minutes = setupDate.minutes + 30;
-                                    } else if(userRequest[4] === 'минуту') {
-                                        setupDate.minutes++;
-                                    }
-                                }
-
-                                if (userRequest[5]) {
-                                    setupDate.hours = setupDate.hours + (+userRequest[6]);
-                                    setupDate.minutes = setupDate.minutes + (+userRequest[7]);
-                                }
                             }
 
                             if (reminder) {
@@ -147,9 +166,9 @@ router.post('/', function(req, res, next) {
 
                                 let date = new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes).getTime();
 
-                                message = 'Ваше напоминание: "' + reminder + '", будет прислано в ' + setupDate.completeDate;
+                                message = 'none';
 
-                                database.writeNewReminder(date, userId, reminder);
+                                database.writeNewReminder(date, userId, reminder).then(mes => func.sendMessage(userId, credentials.accessToken, mes, receivedMsgId));
                             }
                         }
 
@@ -184,8 +203,8 @@ router.post('/', function(req, res, next) {
                                         userRequest[1] = ' ';
                                     }
 
-                                } else if (weekDays.includes(userRequest[2])) {
-                                    weekday = weekDays.indexOf(userRequest[2]);
+                                } else if (arrays.weekDays.includes(userRequest[2])) {
+                                    weekday = arrays.weekDays.indexOf(userRequest[2]);
 
                                     if (weekday > 6) {
                                         weekday = weekday - 7;
