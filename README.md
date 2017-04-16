@@ -1,1 +1,1 @@
-# bot-sveta
+# https://vk.com/svetabot
