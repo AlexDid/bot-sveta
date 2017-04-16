@@ -81,7 +81,7 @@ router.post('/', function(req, res, next) {
                                         if(userRequest[2] === 'полтора') {
                                             setupDate.minutes = setupDate.minutes + 30;
                                             userRequest[2] = 1;
-                                        } else {
+                                        } else if(typeof userRequest[2] === 'string') {
                                             reminder = null;
                                             message = 'Неверно указана дата!'
                                         }
