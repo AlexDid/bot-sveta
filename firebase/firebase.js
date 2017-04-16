@@ -173,12 +173,18 @@ module.exports.sendReminders = function() {
         const newDate = snapshot.key;
         if(newDate < sendDate) {
             sendDate = newDate;
+            clearTimeout(sending);
             sending = send();
         }
     });
 
     function send() {
         return getFirstDate().then(firstDate => {
+            if(firstDate === null) {
+                return setTimeout(() => {
+                    return send();
+                }, 1000)
+            }
             sendDate = firstDate;
             const timeout = sendDate - new Date().getTime();
 
@@ -220,6 +226,10 @@ function getFirstDate() {
     return database.ref().child('dates').once('value').then(snapshot => {
         const dates = snapshot.val();
 
+        if(dates === null) {
+            return null;
+        }
+
         return Object.keys(dates)[0];
     });
 }
@@ -236,7 +246,10 @@ function getRemindersForDate(date) {
             }
         }
 
-        return {remArray: remArray, remIds: remIds};
+        return {
+            remArray: remArray,
+            remIds: remIds
+        };
     });
 }
 
