@@ -94,8 +94,8 @@ router.post('/', function(req, res, next) {
                                     } else if (userRequest[3].includes('ч')) {
                                         setupDate.hours = setupDate.hours + (+userRequest[2]);
                                     }
-
-                                    database.addStatistics('requests/add_reminder_after', userRequest[2]);
+                                    
+                                    database.addStatistics('requests/add_reminder_after', userRequest[2] + ' ' + userRequest[3]);
                                 }
 
                                 if (userRequest[4]) {
@@ -123,7 +123,6 @@ router.post('/', function(req, res, next) {
                                 if (!userRequest[6] && !userRequest[7]) {
                                     userRequest[6] = 8;
                                     userRequest[7] = 0;
-                                    database.addStatistics('requests/add_reminder_for', 'time_is_not_set');
                                 }
 
                                 setupDate = func.getDateObj(new Date(), userRequest[6], userRequest[7]);
@@ -277,8 +276,6 @@ router.post('/', function(req, res, next) {
 
                                 database.writeNewReminder(dates, userId, reminder);
 
-                                database.addStatistics('bot_stat/sent_messages');
-
                                 message = 'Ваше напоминание: "' + reminder + '", будет присылаться ' + userRequest[1] + ' ' + userRequest[2] + ' в ' + func.niceLookingDate(userRequest[5]) + ':' + func.niceLookingDate(userRequest[6]) + ', начиная с ' + func.niceLookingDate(new Date(dates[0]).getDate()) + '.' + func.niceLookingDate(new Date(dates[0]).getMonth() + 1) + '.' + new Date(dates[0]).getFullYear();
                         }
 
@@ -361,7 +358,7 @@ router.post('/', function(req, res, next) {
                                     message = 'none';
                                     database.editDeleteReminder('edit', userId, receivedMsgId, userRequest[2], userRequest[1], userRequest[3]).then(mes => {
                                         func.sendMessage(userId, credentials.accessToken, mes, receivedMsgId);
-                                        database.addStatistics('bot_stat/updated_reminders');
+                                        database.addStatistics('bot_stat/edit_reminders');
                                         database.addStatistics('bot_stat/sent_messages');
                                     });
                                     database.addStatistics('requests/edit_reminder');
