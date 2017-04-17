@@ -400,7 +400,7 @@ router.post('/', function(req, res, next) {
 
                     if(!message) {
                         message = 'Неверный запрос! Для получения помощи напишите "помощь"';
-                        database.addStatistics('requests/invalid_request');
+                        database.addStatistics('requests/invalid_request', receivedMessageBody);
                     }
 
                     if(message !== 'none') {
