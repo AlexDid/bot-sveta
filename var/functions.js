@@ -28,7 +28,27 @@ module.exports.niceLookingDate = function (date) {
 };
 
 //Sends basic message
-module.exports.sendMessage = function(userId, accessToken, replyMessage, receivedMsgId) {
+module.exports.sendMessage = function (userId, accessToken, rerplyMessage, receivedMsgId) {
+    return sendMessage(userId, accessToken, rerplyMessage, receivedMsgId)
+};
+
+module.exports.sendFewMessages = function (msg, mes, userId, token, receivedMsgId) {
+    if(typeof mes === 'object') {
+        sendMessage(userId, token, msg, receivedMsgId);
+        mes.forEach(ms => {
+            sendMessage(userId, token, ms, receivedMsgId);
+        });
+    } else {
+        sendMessage(userId, token, msg, receivedMsgId);
+        sendMessage(userId, token, mes, receivedMsgId);
+    }
+};
+
+function niceLookingDate(date) {
+    return date.toString().length < 2 ? '0' + date : date;
+}
+
+function sendMessage(userId, accessToken, replyMessage, receivedMsgId) {
     return VK.call('users.get', {
         user_ids: userId
     })
@@ -48,20 +68,4 @@ module.exports.sendMessage = function(userId, accessToken, replyMessage, receive
         .catch(error => {
             console.log(error);
         });
-};
-
-module.exports.sendFewMessages = function (msg, mes, userId, token, receivedMsgId) {
-    if(typeof mes === 'object') {
-        sendMessage(userId, token, msg, receivedMsgId);
-        mes.forEach(ms => {
-            sendMessage(userId, token, ms, receivedMsgId);
-        });
-    } else {
-        sendMessage(userId, token, msg, receivedMsgId);
-        sendMessage(userId, token, mes, receivedMsgId);
-    }
-};
-
-function niceLookingDate(date) {
-    return date.toString().length < 2 ? '0' + date : date;
 }

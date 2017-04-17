@@ -29,12 +29,14 @@ module.exports.writeNewReminder = function(date, userId, reminder) {
         reminderId = +remindersKeys[0].match(/(\d+)/)[1] + 1;
 
         if(typeof date === 'number') {
+            addStatistics('bot_stat/added_reminders');
             const setupDate = func.getDateObj(new Date(date));
             database.ref('dates/' + date + '/' + userId + '_' + reminderId).set({user_id: userId, reminder: reminder});
             database.ref('users/' + userId + '/' + reminderId).set({date: date, reminder: reminder});
             message = 'Ваше ' + reminderId + ' напоминание: "' + reminder + '", будет прислано в ' + setupDate.completeDate;
         } else if(typeof date === 'object') {
             date.forEach(function (dt) {
+                addStatistics('bot_stat/added_reminders');
                 index++;
                 database.ref('dates/' + dt + '/' + userId + '_' + reminderId + '_' + index).set({user_id: userId, reminder: reminder});
                 database.ref('users/' + userId + '/' + reminderId + '_' + index).set({date: dt, reminder: reminder});
@@ -73,10 +75,10 @@ module.exports.showReminders = function(userId, receivedMsgId, fromTime, toTime)
             message = messages.join('');
             message = message.replace(/\d{13}/g, '');
 
-            if(message.length > 4096) {
-                 const count = Math.floor(message.length / 4096);
+            if(message.length > 4000) {
+                 const count = Math.floor(message.length / 4000);
                  for(let i = 0; i <= count; i++) {
-                     messageArray.push(message.slice(4096 * i, 4096 * (i + 1)));
+                     messageArray.push(message.slice(4000 * i, 4000 * (i + 1)));
                  }
                 return messageArray;
             }
@@ -112,6 +114,7 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
         });
 
         if(remindersToChange.length === 0) {
+            addStatistics('errors/invalid_msg_id');
             return 'Неверный ID напоминания!';
         }
 
@@ -122,6 +125,8 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
             if(mode === 'delete') {
                 updates['/users/' + userId + '/' + rem] = null;
                 updates['/dates/' + reminders[rem].date + '/' + userId + '_' + rem] = null;
+
+                addStatistics('bot_stat/deleted_reminders');
 
                 return message = 'Ваше напоминание ' + reminderId + ' удалено!';
             }
@@ -141,6 +146,7 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
             }
 
             if(setupDate.getTime() <= new Date().getTime()) {
+                addStatistics('errors/past_date');
                 return message = func.getRandomReply(replyVariants.pastDate);
             }
 
@@ -163,6 +169,7 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
         });
 
         database.ref().update(updates);
+
 
         return message;
     });
@@ -199,6 +206,7 @@ module.exports.sendReminders = function() {
                 getRemindersForDate(sendDate).then(remObj => {
                     remObj.remArray.forEach(rem => {
                         func.sendMessage(rem.user_id, credentials.accessToken, rem.reminder);
+                        addStatistics('bot_stat/sent_reminders');
                     });
                     return remObj.remIds;
                 }).then(remIds => {
@@ -210,6 +218,40 @@ module.exports.sendReminders = function() {
         });
     }
 };
+
+module.exports.addStatistics = function (statGroup, data) {
+  return addStatistics(statGroup, data)
+};
+
+
+function addStatistics(statGroup, data) {
+    database.ref('/stats/' + statGroup).transaction(function(stat) {
+        if (stat) {
+           stat.count++;
+           if(data) {
+               if(stat.data[data]) {
+                   stat.data[data]++;
+               } else {
+                   stat.data[data] =  1;
+               }
+           }
+            return stat;
+        } else {
+            if(data) {
+                return {
+                    count: 1,
+                    data: {
+                        [data]: 1
+                    }
+                };
+            } else {
+                return {
+                    count: 1
+                }
+            }
+        }
+    });
+}
 
 function naturalCompare(a, b) {
     let ax = [], bx = [];

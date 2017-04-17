@@ -44,8 +44,10 @@ router.post('/', function(req, res, next) {
                 user_id: userId
             }).then(subscriptions => {
                 if(!subscriptions.groups.items.includes(credentials.group_id)) {
-                    console.log('User is not subscribed');
                     const replyMessage = func.getRandomReply(replyVariants.newMsgUnsub);
+
+                    database.addStatistics('requests/not_subscribed');
+
                     return func.sendMessage(userId, credentials.accessToken, replyMessage, receivedMsgId);
                 } else {
                     console.log('User is subscribed');
@@ -83,7 +85,8 @@ router.post('/', function(req, res, next) {
                                             userRequest[2] = 1;
                                         } else if(typeof userRequest[2] === 'string') {
                                             reminder = null;
-                                            message = 'Неверно указана дата!'
+                                            database.addStatistics('errors/incorrect_date', userRequest[2]);
+                                            message = 'Неверно указана дата!';
                                         }
                                     }
                                     if (userRequest[3].includes('мин')) {
@@ -91,6 +94,8 @@ router.post('/', function(req, res, next) {
                                     } else if (userRequest[3].includes('ч')) {
                                         setupDate.hours = setupDate.hours + (+userRequest[2]);
                                     }
+
+                                    database.addStatistics('requests/add_reminder_after', userRequest[2]);
                                 }
 
                                 if (userRequest[4]) {
@@ -101,11 +106,13 @@ router.post('/', function(req, res, next) {
                                     } else if(userRequest[4] === 'минуту') {
                                         setupDate.minutes++;
                                     }
+                                    database.addStatistics('requests/add_reminder_after', userRequest[4]);
                                 }
 
                                 if (userRequest[5]) {
                                     setupDate.hours = setupDate.hours + (+userRequest[6]);
                                     setupDate.minutes = setupDate.minutes + (+userRequest[7]);
+                                    database.addStatistics('requests/add_reminder_after', userRequest[5]);
                                 }
 
                             } else if (receivedMessageBody.match(regexes.add.at)) {
@@ -113,25 +120,33 @@ router.post('/', function(req, res, next) {
                                 reminder = userRequest[8];
 
                                 //setup time if it's not set
-                                if (userRequest[6] === undefined && userRequest[7] === undefined) {
+                                if (!userRequest[6] && !userRequest[7]) {
                                     userRequest[6] = 8;
-                                    userRequest[7] = '0';
+                                    userRequest[7] = 0;
+                                    database.addStatistics('requests/add_reminder_for', 'time_is_not_set');
                                 }
 
                                 setupDate = func.getDateObj(new Date(), userRequest[6], userRequest[7]);
 
                                 if (userRequest[1] === 'завтра') {
                                     setupDate.day++;
+                                    database.addStatistics('requests/add_reminder_for', 'tomorrow');
                                 }
 
                                 if (userRequest[1] === 'послезавтра') {
                                     setupDate.day = setupDate.day + 2;
+                                    database.addStatistics('requests/add_reminder_for', 'day_after_tomorrow');
                                 }
 
                                 if (userRequest[2]) {
                                     setupDate.day = userRequest[2];
                                     setupDate.month = userRequest[3];
                                     setupDate.year = userRequest[4];
+                                    database.addStatistics('requests/add_reminder_for', 'exact_date');
+                                }
+
+                                if (userRequest[1] === 'сегодня') {
+                                    database.addStatistics('requests/add_reminder_for', 'today');
                                 }
 
                                 if(arrays.weekDays.includes(userRequest[1])) {
@@ -144,6 +159,7 @@ router.post('/', function(req, res, next) {
                                     } else {
                                         setupDate.day = day;
                                     }
+                                    database.addStatistics('requests/add_reminder_for', 'weekday');
                                 }
 
 
@@ -151,6 +167,7 @@ router.post('/', function(req, res, next) {
                                 if (new Date().getTime() > new Date(setupDate.year, setupDate.month - 1, setupDate.day, setupDate.hours, setupDate.minutes)) {
                                     reminder = null;
                                     message = func.getRandomReply(replyVariants.pastDate);
+                                    database.addStatistics('errors/past_date');
                                 }
 
                                 //check if user's date is bigger then the last day of the month
@@ -169,6 +186,7 @@ router.post('/', function(req, res, next) {
                                 message = 'none';
 
                                 database.writeNewReminder(date, userId, reminder).then(mes => func.sendMessage(userId, credentials.accessToken, mes, receivedMsgId));
+                                database.addStatistics('bot_stat/sent_messages');
                             }
                         }
 
@@ -184,14 +202,17 @@ router.post('/', function(req, res, next) {
                                     if(userRequest[2] === 'утро') {
                                         userRequest[5] = 8;
                                         userRequest[6] = 0;
+                                        database.addStatistics('requests/add_multiple_reminders_for', 'every_morning');
                                     }
-                                    if(userRequest[2] === 'день') {
+                                    if(userRequest[2] === 'день' || userRequest[2] === 'ежедневно') {
                                         userRequest[5] = 12;
                                         userRequest[6] = 0;
+                                        database.addStatistics('requests/add_multiple_reminders_for', 'every_day');
                                     }
                                     if(userRequest[2] === 'вечер') {
                                         userRequest[5] = 18;
                                         userRequest[6] = 0;
+                                        database.addStatistics('requests/add_multiple_reminders_for', 'every_evening');
                                     }
                                 }
 
@@ -218,6 +239,8 @@ router.post('/', function(req, res, next) {
 
                                     day = day - 7;
 
+                                    database.addStatistics('requests/add_multiple_reminders_for', 'every_weekday');
+
                                 } else if (userRequest[3]) {
                                     monthDay = userRequest[3];
 
@@ -232,6 +255,8 @@ router.post('/', function(req, res, next) {
                                     }
 
                                     month--;
+
+                                    database.addStatistics('requests/add_multiple_reminders_for', 'every_month');
                                 }
 
                                 do {
@@ -251,6 +276,8 @@ router.post('/', function(req, res, next) {
                                 } while (new Date(dates[dates.length - 1]).getFullYear() === setupDate.year);
 
                                 database.writeNewReminder(dates, userId, reminder);
+
+                                database.addStatistics('bot_stat/sent_messages');
 
                                 message = 'Ваше напоминание: "' + reminder + '", будет присылаться ' + userRequest[1] + ' ' + userRequest[2] + ' в ' + func.niceLookingDate(userRequest[5]) + ':' + func.niceLookingDate(userRequest[6]) + ', начиная с ' + func.niceLookingDate(new Date(dates[0]).getDate()) + '.' + func.niceLookingDate(new Date(dates[0]).getMonth() + 1) + '.' + new Date(dates[0]).getFullYear();
                         }
@@ -272,8 +299,15 @@ router.post('/', function(req, res, next) {
 
                                     msg = 'Ваши напоминания на ' + setupDate.dateWithoutTime + ':\n';
 
+                                    database.addStatistics('requests/show_reminders_for', 'exact_date');
+
                                 } else {
                                     switch (userRequest[1]) {
+                                        case 'сегодня':
+                                            fromTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day , 0, 0).getTime();
+                                            toTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 1, 0, 0).getTime();
+                                            break;
+
                                         case 'завтра':
                                             fromTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 1, 0, 0).getTime();
                                             toTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 2, 0, 0).getTime();
@@ -296,13 +330,20 @@ router.post('/', function(req, res, next) {
                                     }
 
                                     msg = 'Ваши напоминания на ' + userRequest[1] + ':\n';
+
+                                    database.addStatistics('requests/show_reminders_for', userRequest[1]);
                                 }
 
                                 database.showReminders(userId, receivedMsgId, fromTime, toTime).then(mes => func.sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
 
+                                database.addStatistics('bot_stat/sent_messages');
+
                             } else if (receivedMessageBody.match(regexes.show.all)) {
                                 msg = 'Все Ваши напоминания:\n';
                                 database.showReminders(userId, receivedMsgId).then(mes => func.sendFewMessages(msg, mes, userId, credentials.accessToken, receivedMsgId));
+
+                                database.addStatistics('bot_stat/sent_messages');
+                                database.addStatistics('requests/show_reminders_all');
                             }
 
                         }
@@ -311,14 +352,19 @@ router.post('/', function(req, res, next) {
                                 userRequest = receivedMessageBody.match(regexes.change);
 
                                 if (userRequest[1] === 'время' && !(userRequest[4] && userRequest[5])) {
+                                    database.addStatistics('errors/incorrect_time', userRequest[4] + '.' + userRequest[5]);
                                     message = 'Неправильно указано время!';
                                 } else if (userRequest[1] === ' дату' && !(userRequest[6] && userRequest[7] && userRequest[8])) {
+                                    database.addStatistics('errors/incorrect_date', userRequest[6] + '.' + userRequest[7] + '.' +  userRequest[8]);
                                     message = 'Неправильно указана дата!';
                                 } else {
                                     message = 'none';
                                     database.editDeleteReminder('edit', userId, receivedMsgId, userRequest[2], userRequest[1], userRequest[3]).then(mes => {
                                         func.sendMessage(userId, credentials.accessToken, mes, receivedMsgId);
+                                        database.addStatistics('bot_stat/updated_reminders');
+                                        database.addStatistics('bot_stat/sent_messages');
                                     });
+                                    database.addStatistics('requests/edit_reminder');
                                 }
                         }
 
@@ -327,37 +373,46 @@ router.post('/', function(req, res, next) {
                                 message = 'none';
                                 database.editDeleteReminder('delete', userId, receivedMsgId, userRequest[1]).then(mes => {
                                     func.sendMessage(userId, credentials.accessToken, mes, receivedMsgId);
+                                    database.addStatistics('bot_stat/sent_messages');
                                 });
+                            database.addStatistics('requests/delete_reminder');
                         }
 
                         if(command === 'помощь') {
                             message = replyVariants.help;
+                            database.addStatistics('requests/help');
                         }
 
                         if(commands.hi.includes(command)) {
                             message = func.getRandomReply(replyVariants.newMsgSub);
+                            database.addStatistics('requests/hi');
                         }
 
                         if(commands.thx.includes(command)) {
                             message = func.getRandomReply(replyVariants.thanks);
+                            database.addStatistics('requests/thanks');
                         }
 
                         if(commands.bye.includes(command)) {
                             message = func.getRandomReply(replyVariants.bye);
+                            database.addStatistics('requests/bye');
                         }
 
                     if(!message) {
-                        message = 'Неверный запрос! Для получения помощи напишите "помощь"'
+                        message = 'Неверный запрос! Для получения помощи напишите "помощь"';
+                        database.addStatistics('requests/invalid_request');
                     }
 
                     if(message !== 'none') {
                         func.sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+                        database.addStatistics('bot_stat/sent_messages');
                     }
                 }
             }).catch(err => {
                 console.log('ERROR: ' + err);
                 message = 'Неверный запрос! Для получения помощи напишите "помощь"';
                 func.sendMessage(userId, credentials.accessToken, message, receivedMsgId);
+                database.addStatistics('errors/invalid_messages', receivedMessageBody);
             });
             res.send('ok');
             break;
@@ -367,6 +422,7 @@ router.post('/', function(req, res, next) {
             const groupJoinReply = func.getRandomReply(replyVariants.groupJoin);
             console.log('User joined: ' + joinedUserId);
             func.sendMessage(joinedUserId, credentials.accessToken, groupJoinReply);
+            database.addStatistics('events/join_group', joinedUserId);
             res.send('ok');
             break;
 
@@ -375,6 +431,7 @@ router.post('/', function(req, res, next) {
             const groupLeaveReply = func.getRandomReply(replyVariants.groupLeave);
             console.log('User left: ' + leavedUserId);
             func.sendMessage(leavedUserId, credentials.accessToken, groupLeaveReply);
+            database.addStatistics('events/leave_group', leavedUserId);
             res.send('ok');
             break;
 
