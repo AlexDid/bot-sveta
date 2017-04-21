@@ -28,6 +28,11 @@ module.exports.writeNewReminder = function(date, userId, reminder) {
 
         reminderId = +remindersKeys[0].match(/(\d+)/)[1] + 1;
 
+        if (reminderId > 50) {
+            addStatistics('errors/max_amount_reached');
+            return 'Достигнут предел количества напоминаний (50 шт)';
+        }
+
         if(typeof date === 'number') {
             addStatistics('bot_stat/added_reminders');
             const setupDate = func.getDateObj(new Date(date));
@@ -108,7 +113,7 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
 
         //get all instances of reminder
         remindersKeys.forEach(rem => {
-            if(rem.match(new RegExp(reminderId + '_\\d+')) || rem === reminderId) {
+            if(rem.match(new RegExp(reminderId + '_\\d+')) || rem === reminderId || reminderId === 'все') {
                 remindersToChange.push(rem);
             }
         });
@@ -128,7 +133,13 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
 
                 addStatistics('bot_stat/deleted_reminders');
 
-                return message = 'Ваше напоминание ' + reminderId + ' удалено!';
+                if(reminderId === 'все') {
+                    message = 'Все Ваше напоминания удалены!';
+                } else {
+                    message = 'Ваше напоминание ' + reminderId + ' удалено!';
+                }
+
+                return message;
             }
 
             const time = changeValue.match(/(\d{1,2}):(\d{2})/);
