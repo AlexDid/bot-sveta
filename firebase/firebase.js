@@ -33,7 +33,7 @@ module.exports.writeNewReminder = function(date, userId, reminder) {
             const setupDate = func.getDateObj(new Date(date));
             database.ref('dates/' + date + '/' + userId + '_' + reminderId).set({user_id: userId, reminder: reminder});
             database.ref('users/' + userId + '/' + reminderId).set({date: date, reminder: reminder});
-            message = 'Ваше ' + reminderId + ' напоминание: "' + reminder + '", будет прислано в ' + setupDate.completeDate;
+            message = 'Ваше напоминание номер ' + reminderId + ': "' + reminder + '", будет прислано в ' + setupDate.completeDate;
         } else if(typeof date === 'object') {
             date.forEach(function (dt) {
                 addStatistics('bot_stat/added_reminders');
@@ -56,7 +56,7 @@ module.exports.showReminders = function(userId, receivedMsgId, fromTime, toTime)
 
         for(let reminderId in reminders) {
             const date = func.getDateObj(new Date(reminders[reminderId].date)).completeDate;
-            messages.push(reminders[reminderId].date + ' ' + date + ' - ' + reminders[reminderId].reminder + ' (' + reminderId + ')\n');
+            messages.push(reminders[reminderId].date + ' ' + date + ' - ' + reminders[reminderId].reminder + ' (номер ' + reminderId + ')\n');
         }
 
         messages = messages.sort();
@@ -114,7 +114,7 @@ module.exports.editDeleteReminder = function(mode, userId, receivedMsgId, remind
         });
 
         if(remindersToChange.length === 0) {
-            addStatistics('errors/invalid_msg_id');
+            addStatistics('errors/invalid_reminder_id');
             return 'Неверный ID напоминания!';
         }
 

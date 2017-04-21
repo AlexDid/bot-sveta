@@ -117,12 +117,22 @@ router.post('/', function(req, res, next) {
 
                             } else if (receivedMessageBody.match(regexes.add.at)) {
                                 userRequest = receivedMessageBody.match(regexes.add.at);
-                                reminder = userRequest[8];
+                                reminder = userRequest[9];
 
                                 //setup time if it's not set
                                 if (!userRequest[6] && !userRequest[7]) {
-                                    userRequest[6] = 8;
-                                    userRequest[7] = 0;
+                                    if(userRequest[8] === 'утром') {
+                                        userRequest[6] = 8;
+                                        userRequest[7] = '0';
+                                    }
+                                    if(userRequest[8] === 'днем' || !userRequest[8]) {
+                                        userRequest[6] = 12;
+                                        userRequest[7] = '0';
+                                    }
+                                    if(userRequest[8] === 'вечером') {
+                                        userRequest[6] = 18;
+                                        userRequest[7] = '0';
+                                    }
                                 }
 
                                 setupDate = func.getDateObj(new Date(), userRequest[6], userRequest[7]);
@@ -299,6 +309,7 @@ router.post('/', function(req, res, next) {
                                     database.addStatistics('requests/show_reminders_for', 'exact_date');
 
                                 } else {
+                                    let fromTimeDate, toTimeDate;
                                     switch (userRequest[1]) {
                                         case 'сегодня':
                                             fromTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day , 0, 0).getTime();
@@ -326,7 +337,27 @@ router.post('/', function(req, res, next) {
                                             break;
                                     }
 
-                                    msg = 'Ваши напоминания на ' + userRequest[1] + ':\n';
+                                    if(arrays.weekDays.includes(userRequest[1])) {
+                                        let weekday = arrays.weekDays.indexOf(userRequest[1]);
+
+                                        if (weekday > 6) {
+                                            weekday = weekday - 7;
+                                        }
+
+                                        setupDate.day = setupDate.weekday <= weekday ? setupDate.day + (weekday - setupDate.weekday) : setupDate.day + 7 - (setupDate.weekday - weekday);
+
+                                        fromTime = new Date(setupDate.year, setupDate.month - 1, setupDate.day, 0, 0).getTime();
+                                        toTime = new Date(setupDate.year, setupDate.month - 1, +setupDate.day + 1, 0, 0).getTime();
+                                    }
+
+                                    fromTimeDate = func.getDateObj(new Date(fromTime)).dateWithoutTime;
+                                    toTimeDate = func.getDateObj(new Date(toTime - 6000)).dateWithoutTime;
+
+                                    if(fromTimeDate.toString() === toTimeDate.toString()) {
+                                        msg = 'Ваши напоминания на ' + userRequest[1] + ' (' + fromTimeDate + '):\n';
+                                    } else {
+                                        msg = 'Ваши напоминания на ' + userRequest[1] + ' (' + fromTimeDate + ' - ' + toTimeDate + '):\n';
+                                    }
 
                                     database.addStatistics('requests/show_reminders_for', userRequest[1]);
                                 }
