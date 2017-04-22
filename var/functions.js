@@ -50,7 +50,8 @@ function niceLookingDate(date) {
 
 function sendMessage(userId, accessToken, replyMessage, receivedMsgId) {
     return VK.call('users.get', {
-        user_ids: userId
+        user_ids: userId,
+        lang: 'ru'
     })
         .then(res => {
             const userFirstName = res[0].first_name;
